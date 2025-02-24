@@ -184,7 +184,7 @@
 		const right = halfScale * $imageWidth;
 		const top = halfScale * -$imageHeight;
 		const bottom = halfScale * $imageHeight;
-		const step = $gridSize * $scale * $ratio;
+		const step = ($gridSize * $scale) / $ratio;
 
 		if (step < 1) {
 			return;
