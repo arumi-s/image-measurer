@@ -47,12 +47,18 @@
 	let image: HTMLImageElement;
 	let containerElement: HTMLDivElement;
 	let backgroundElement: HTMLCanvasElement;
+	let gridElement: HTMLCanvasElement;
 	let canvasElement: HTMLCanvasElement;
 
 	let backgroundCtx: CanvasRenderingContext2D;
 	$: if (backgroundElement) {
 		backgroundCtx = backgroundElement.getContext('2d')!;
 		backgroundCtx.imageSmoothingEnabled = false;
+	}
+	let gridCtx: CanvasRenderingContext2D;
+	$: if (gridElement) {
+		gridCtx = gridElement.getContext('2d')!;
+		gridCtx.imageSmoothingEnabled = false;
 	}
 	let ctx: CanvasRenderingContext2D;
 	$: if (canvasElement) {
@@ -70,9 +76,12 @@
 
 		backgroundCtx = backgroundElement.getContext('2d')!;
 		backgroundCtx.imageSmoothingEnabled = false;
+		gridCtx = gridElement.getContext('2d')!;
+		gridCtx.imageSmoothingEnabled = false;
 		ctx = canvasElement.getContext('2d')!;
 		ctx.imageSmoothingEnabled = false;
 		drawBackground();
+		drawGrid();
 		drawLines();
 	});
 
@@ -88,6 +97,12 @@
 	let name = record.name;
 	let lineColor = record.lineColor;
 	let textColor = record.textColor;
+	let gridColor = record.gridColor;
+	const gridSize = writable(record.gridSize);
+	const gridOffsetX = writable(record.gridOffsetX);
+	const gridOffsetY = writable(record.gridOffsetY);
+	const showGrid = writable(record.showGrid);
+	const showText = writable(record.showText);
 	const showReal = writable(record.showReal);
 	const selectMode = writable(record.selectMode);
 	const autoLock = writable(record.autoLock);
@@ -134,6 +149,7 @@
 		$offsetY = 0;
 		$scale = 1;
 		drawBackground();
+		drawGrid();
 		drawLines();
 	}
 
@@ -150,6 +166,62 @@
 
 		backgroundCtx.drawImage(image, 0, 0, $imageWidth, $imageHeight);
 		backgroundCtx.restore();
+	}
+
+	function drawGrid() {
+		if (gridCtx == null || gridElement == null) return;
+
+		gridCtx.clearRect(0, 0, gridElement.width, gridElement.height);
+
+		if (!$showGrid) {
+			return;
+		}
+
+		const $scale = get(scale);
+		const $gridSize = get(gridSize);
+		const halfScale = $scale / 2;
+		const left = halfScale * -$imageWidth;
+		const right = halfScale * $imageWidth;
+		const top = halfScale * -$imageHeight;
+		const bottom = halfScale * $imageHeight;
+		const step = $gridSize * $scale * $ratio;
+
+		if (step < 1) {
+			return;
+		}
+
+		gridCtx.save();
+
+		gridCtx.translate($halfWidth, $halfHeight);
+		gridCtx.translate($offsetX * $scale, $offsetY * $scale);
+
+		gridCtx.strokeStyle = gridColor;
+		gridCtx.lineWidth = 1;
+
+		const startX = $ratio * $scale * $gridOffsetX;
+		const startY = $ratio * $scale * $gridOffsetY;
+		gridCtx.beginPath();
+
+		for (let x = startX - step; x >= left; x -= step) {
+			gridCtx.moveTo(x, top);
+			gridCtx.lineTo(x, bottom);
+		}
+		for (let x = startX; x <= right; x += step) {
+			gridCtx.moveTo(x, top);
+			gridCtx.lineTo(x, bottom);
+		}
+		for (let y = startY; y >= top; y -= step) {
+			gridCtx.moveTo(left, y);
+			gridCtx.lineTo(right, y);
+		}
+		for (let y = startY; y <= bottom; y += step) {
+			gridCtx.moveTo(left, y);
+			gridCtx.lineTo(right, y);
+		}
+
+		gridCtx.stroke();
+
+		gridCtx.restore();
 	}
 
 	function drawLines() {
@@ -189,6 +261,7 @@
 			ctx.restore();
 		}
 
+		const isShowText = get(showText);
 		for (const line of $lines) {
 			const realStart = i2r(line.start);
 			const realEnd = i2r(line.end);
@@ -209,7 +282,7 @@
 			ctx.lineTo(realEnd.x, realEnd.y + radius - halfWidth + realStrokeWidth);
 			ctx.stroke();
 
-			if (line.name) {
+			if (isShowText && line.name) {
 				ctx.save();
 				const realLine = {
 					start: realStart.x < realEnd.x ? realStart : realEnd,
@@ -231,9 +304,12 @@
 		if ($containerHeight > 0 && $containerWidth > 0) {
 			backgroundElement.width = $containerWidth;
 			backgroundElement.height = $containerHeight;
+			gridElement.width = $containerWidth;
+			gridElement.height = $containerHeight;
 			canvasElement.width = $containerWidth;
 			canvasElement.height = $containerHeight;
 			drawBackground();
+			drawGrid();
 			drawLines();
 		}
 	}
@@ -424,6 +500,7 @@
 					$offsetX = startX + relX / $scale;
 					$offsetY = startY + relY / $scale;
 					drawBackground();
+					drawGrid();
 					drawLines();
 				},
 				() => {
@@ -446,6 +523,7 @@
 		$offsetY += newOffset.y - oldOffset.y;
 
 		drawBackground();
+		drawGrid();
 		drawLines();
 	}
 
@@ -497,6 +575,12 @@
 			image: record.image,
 			lineColor,
 			textColor,
+			gridColor,
+			gridSize: get(gridSize),
+			gridOffsetX: get(gridOffsetX),
+			gridOffsetY: get(gridOffsetY),
+			showGrid: get(showGrid),
+			showText: get(showText),
 			showReal: get(showReal),
 			selectMode: get(selectMode),
 			autoLock: get(autoLock),
@@ -515,6 +599,14 @@
 
 	function handleUpdateTextColor() {
 		drawLines();
+	}
+
+	function handleUpdateGridColor() {
+		drawGrid();
+	}
+
+	function handleUpdateGridSize() {
+		drawGrid();
 	}
 
 	function handleClickLock(line: MeasurementLine) {
@@ -567,6 +659,7 @@
 		style:cursor={$cursor}
 	>
 		<canvas class="col-start-1 row-start-1" bind:this={backgroundElement}></canvas>
+		<canvas class="col-start-1 row-start-1" bind:this={gridElement}></canvas>
 		<canvas
 			class="col-start-1 row-start-1"
 			bind:this={canvasElement}
@@ -632,19 +725,14 @@
 				<div class="mx-auto"></div>
 				<input
 					type="color"
-					bind:value={textColor}
-					class="size-7 shrink-0 rounded-sm"
-					on:input={handleUpdateTextColor}
-				/>
-				<input
-					type="color"
 					bind:value={lineColor}
 					class="size-7 shrink-0 rounded-sm"
 					on:input={handleUpdateLineColor}
+					on:change={handleUpdateLineColor}
 				/>
 			</div>
 			<div class="flex flex-row items-center gap-1 px-1 select-none">
-				<label for="ratio" class="text-sm font-medium text-neutral-700">Ratio:</label>
+				<label for="ratio" class="shrink-0 text-sm font-medium text-neutral-700">Ratio: </label>
 				<input
 					type="number"
 					id="ratio"
@@ -652,9 +740,86 @@
 					min="0"
 					step="0.1"
 					class="h-7 flex-1 rounded-sm border border-neutral-300 bg-white px-1 text-sm"
+					on:change={handleUpdateGridSize}
 				/>
 				<label class="flex shrink-0 cursor-pointer items-center">
 					<input type="checkbox" bind:checked={$showReal} class="peer sr-only" />
+					<div
+						class="peer relative h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-blue-500 peer-focus:ring-4 peer-focus:ring-blue-300 peer-focus:outline-none after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white rtl:peer-checked:after:-translate-x-full dark:border-gray-600 dark:bg-gray-700 dark:peer-checked:bg-blue-600 dark:peer-focus:ring-blue-800"
+					></div>
+				</label>
+			</div>
+			<div class="flex flex-row items-center gap-1 px-1 select-none">
+				<label for="gridSize" class="shrink-0 text-sm font-medium text-neutral-700">Grid: </label>
+				<input
+					type="number"
+					id="gridSize"
+					bind:value={$gridSize}
+					min="0"
+					step="1"
+					size="1"
+					class="h-7 flex-1 rounded-sm border border-neutral-300 bg-white px-1 text-sm"
+					on:change={handleUpdateGridSize}
+				/>
+				<label for="gridOffsetX" class="text-sm font-medium text-neutral-700">X: </label>
+				<input
+					type="number"
+					id="gridOffsetX"
+					bind:value={$gridOffsetX}
+					min="0"
+					step="1"
+					size="1"
+					class="h-7 flex-1 rounded-sm border border-neutral-300 bg-white px-1 text-sm"
+					on:change={handleUpdateGridSize}
+				/>
+				<label for="gridOffsetY" class="text-sm font-medium text-neutral-700">Y: </label>
+				<input
+					type="number"
+					id="gridOffsetY"
+					bind:value={$gridOffsetY}
+					min="0"
+					step="1"
+					size="1"
+					class="h-7 flex-1 rounded-sm border border-neutral-300 bg-white px-1 text-sm"
+					on:change={handleUpdateGridSize}
+				/>
+
+				<input
+					type="color"
+					bind:value={gridColor}
+					class="size-7 shrink-0 rounded-sm"
+					on:input={handleUpdateGridColor}
+					on:change={handleUpdateGridColor}
+				/>
+				<label class="flex shrink-0 cursor-pointer items-center">
+					<input
+						type="checkbox"
+						bind:checked={$showGrid}
+						class="peer sr-only"
+						on:change={handleUpdateGridColor}
+					/>
+					<div
+						class="peer relative h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-blue-500 peer-focus:ring-4 peer-focus:ring-blue-300 peer-focus:outline-none after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white rtl:peer-checked:after:-translate-x-full dark:border-gray-600 dark:bg-gray-700 dark:peer-checked:bg-blue-600 dark:peer-focus:ring-blue-800"
+					></div>
+				</label>
+			</div>
+			<div class="flex flex-row items-center gap-1 px-1 select-none">
+				<label for="ratio" class="shrink-0 text-sm font-medium text-neutral-700">Text: </label>
+				<div class="mx-auto"></div>
+				<input
+					type="color"
+					bind:value={textColor}
+					class="size-7 shrink-0 rounded-sm"
+					on:input={handleUpdateTextColor}
+					on:change={handleUpdateTextColor}
+				/>
+				<label class="flex shrink-0 cursor-pointer items-center">
+					<input
+						type="checkbox"
+						bind:checked={$showText}
+						class="peer sr-only"
+						on:change={handleUpdateTextColor}
+					/>
 					<div
 						class="peer relative h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-blue-500 peer-focus:ring-4 peer-focus:ring-blue-300 peer-focus:outline-none after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white rtl:peer-checked:after:-translate-x-full dark:border-gray-600 dark:bg-gray-700 dark:peer-checked:bg-blue-600 dark:peer-focus:ring-blue-800"
 					></div>

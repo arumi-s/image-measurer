@@ -5,4 +5,8 @@
 	body {
 		@apply size-full;
 	}
+
+	input {
+		@apply min-w-0;
+	}
 }

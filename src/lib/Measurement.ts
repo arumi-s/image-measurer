@@ -14,6 +14,12 @@ export interface Measurement {
 	image: string;
 	lineColor: string;
 	textColor: string;
+	gridColor: string;
+	gridSize: number;
+	gridOffsetX: number;
+	gridOffsetY: number;
+	showGrid: boolean;
+	showText: boolean;
 	showReal: boolean;
 	selectMode: boolean;
 	autoLock: boolean;
@@ -32,8 +38,14 @@ export function createMeasurement(
 	return {
 		name: name ?? 'unnamed',
 		image,
-		lineColor: '#f00',
-		textColor: '#000',
+		lineColor: '#ff0000',
+		textColor: '#000000',
+		gridColor: '#cccccc',
+		gridSize: 1,
+		gridOffsetX: 0,
+		gridOffsetY: 0,
+		showGrid: false,
+		showText: true,
 		showReal: true,
 		selectMode: true,
 		autoLock: false,
