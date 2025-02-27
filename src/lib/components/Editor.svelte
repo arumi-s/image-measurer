@@ -14,7 +14,6 @@
 		type Vector2
 	} from '$lib/math';
 	import { Button } from '$lib/components/ui/button';
-	import TrashIcon from 'lucide-svelte/icons/trash';
 	import SquareSquareIcon from 'lucide-svelte/icons/square-square';
 	import CrosshairIcon from 'lucide-svelte/icons/crosshair';
 	import SaveIcon from 'lucide-svelte/icons/save';
@@ -23,11 +22,21 @@
 	import MousePointer2Icon from 'lucide-svelte/icons/mouse-pointer-2';
 	import FileSpreadsheetIcon from 'lucide-svelte/icons/file-spreadsheet';
 	import LockIcon from 'lucide-svelte/icons/lock';
-	import LockOpenIcon from 'lucide-svelte/icons/lock-open';
 	import Axis3DIcon from 'lucide-svelte/icons/axis-3d';
-	import type { Measurement, MeasurementLine, ClosestLineSegmentEndpoint } from '$lib/Measurement';
+	import {
+		type Measurement,
+		type MeasurementLine,
+		type ClosestLineSegmentEndpoint,
+		locateTreeLeaf,
+		type MeasurementTreeGroup,
+		removeTreeNode,
+		type MeasurementTree
+	} from '$lib/Measurement';
 	import { pressedKey } from '$lib/key';
 	import { createUndoer } from '$lib/undoer';
+	import { toast } from 'svelte-sonner';
+	import Tree from './Tree.svelte';
+	import TreeItem from './TreeItem.svelte';
 
 	export let record: Measurement;
 
@@ -111,16 +120,26 @@
 	const offsetX = writable(record.offsetX);
 	const offsetY = writable(record.offsetY);
 	const scale = writable(record.scale);
-	const lines = writable(record.lines);
+	const lines = writable(record.lines.map((l, index) => ({ ...l, id: l.id ?? index + 1 })));
+	const hierarchy = writable(
+		$lines.reduce((p, c) => {
+			if (!locateTreeLeaf(p, c.id)) p.push({ type: 'leaf', id: c.id });
+			return p;
+		}, record.hierarchy)
+	);
 
-	const undoer = createUndoer({ lines: record.lines });
+	const undoer = createUndoer(getState());
 	const { canUndo, canRedo } = undoer;
 	$: {
 		$lines = $undoer.lines;
+		$hierarchy = $undoer.hierarchy;
 		drawLines();
 	}
 	function pushState() {
-		$undoer = { lines: $lines };
+		$undoer = getState();
+	}
+	function getState() {
+		return { lines: $lines, hierarchy: $hierarchy };
 	}
 
 	const closest = writable<ClosestLineSegmentEndpoint[]>([]);
@@ -139,7 +158,8 @@
 		([$isDrawing, $isPanning, $closest, $realSelectMode]) => {
 			if ($isDrawing) return 'crosshair';
 			if ($isPanning) return 'move';
-			if ($closest.length && $realSelectMode && !$closest.every(([c]) => c.isLocked)) return 'grab';
+			if ($closest.length && $realSelectMode && !$closest.every(([c]) => c.isLocked || c.isHidden))
+				return 'grab';
 			return 'crosshair';
 		}
 	);
@@ -263,6 +283,7 @@
 
 		const isShowText = get(showText);
 		for (const line of $lines) {
+			if (line.isHidden) continue;
 			const realStart = i2r(line.start);
 			const realEnd = i2r(line.end);
 
@@ -332,7 +353,7 @@
 		let minDistance = dotSize / 2;
 		let closest: ClosestLineSegmentEndpoint[] = [];
 		for (const line of lines) {
-			if (skipLocked && line.isLocked) continue;
+			if (line.isHidden || (skipLocked && line.isLocked)) continue;
 			let distance = Math.hypot(line.start.x - point.x, line.start.y - point.y);
 			if (distance === minDistance) {
 				closest.push([line, 'start']);
@@ -351,6 +372,7 @@
 		if (closest.length === 0) {
 			let minDistance = strokeWidth / 2;
 			for (const line of lines) {
+				if (line.isHidden) continue;
 				const distance = closestDistanceFromLineSegment(point, line);
 				if (distance < minDistance) {
 					minDistance = distance;
@@ -383,16 +405,18 @@
 			event.preventDefault();
 			const closest = $realSelectMode
 				? findClosestFromPoint($lines, r2i({ x: event.offsetX, y: event.offsetY })).filter(
-						(l) => !l[0].isLocked
+						(l) => !l[0].isLocked && !l[0].isHidden
 					)
 				: [];
 
 			let isNewLine = false;
 			if (event.button === 0 && closest.length === 0) {
 				const line: MeasurementLine = {
+					id: $lines.map((l) => l.id).reduce((a, b) => Math.max(a, b), 0) + 1,
 					name: '',
 					start: r2i({ x: event.offsetX, y: event.offsetY }),
 					end: r2i({ x: event.offsetX, y: event.offsetY }),
+					isHidden: false,
 					isLocked: get(autoLock)
 				};
 				if ($pixelPerfect) {
@@ -458,7 +482,10 @@
 					handler: (relX: number, relY: number) => {
 						if (isNewLine && lineSegmentLength(line) > 0) {
 							$lines.push(line);
+							$hierarchy.push({ type: 'leaf', id: line.id });
+							$hierarchy = $hierarchy;
 							isNewLine = false;
+							tick().then(() => scrollToBottom());
 						}
 						rawPoint = r2i({ x: thisPoint.x + relX, y: thisPoint.y + relY });
 					}
@@ -554,10 +581,10 @@
 	async function handleClickSaveAsCsv() {
 		const data = get(displayedLines);
 		const csv =
-			`index,name,x,y,angle,length\n` +
+			`id,name,x,y,angle,length\n` +
 			data
-				.map((line, index) => {
-					return `${index + 1},${line.line.name ?? ''},${line.x},${line.y},${line.angle},${line.length}`;
+				.map((line) => {
+					return `${line.line.id},${line.line.name ?? ''},${line.x},${line.y},${line.angle},${line.length}`;
 				})
 				.join('\n');
 		const blob = new Blob([csv], { type: 'text/csv' });
@@ -567,6 +594,8 @@
 		a.download = `${name}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
+
+		toast.success('Saved as CSV');
 	}
 
 	function handleClickSave() {
@@ -589,7 +618,8 @@
 			offsetX: get(offsetX),
 			offsetY: get(offsetY),
 			scale: get(scale),
-			lines: get(lines)
+			lines: get(lines),
+			hierarchy: get(hierarchy)
 		});
 	}
 
@@ -609,6 +639,13 @@
 		drawGrid();
 	}
 
+	function handleClickHide(line: MeasurementLine) {
+		line.isHidden = !line.isHidden;
+		$lines = $lines;
+		drawLines();
+		pushState();
+	}
+
 	function handleClickLock(line: MeasurementLine) {
 		line.isLocked = !line.isLocked;
 		$lines = $lines;
@@ -618,6 +655,7 @@
 
 	function handleClickDelete(line: MeasurementLine) {
 		$lines = $lines.filter((l) => l !== line);
+		$hierarchy = removeTreeNode($hierarchy, line.id);
 		drawLines();
 		pushState();
 	}
@@ -626,18 +664,34 @@
 		drawLines();
 	}
 
-	function handleBlurLineName(line: MeasurementLine) {
+	function handleChangeLineName(line: MeasurementLine) {
+		//pushState();
+	}
+
+	function handleClickDeleteGroup(group: MeasurementTreeGroup) {
+		$hierarchy = removeTreeNode($hierarchy, group.id);
 		pushState();
+	}
+
+	function handleUpdateTree(tree: MeasurementTree[]) {
+		$hierarchy = tree;
+		pushState();
+	}
+
+	let scrollElement: HTMLElement;
+	function scrollToBottom() {
+		if (scrollElement) {
+			scrollElement.scrollTop = scrollElement.scrollHeight;
+		}
 	}
 
 	const displayedLines = derived(
 		[lines, closest, ratio, showReal],
 		([$lines, $closest, $ratio, $showReal]) => {
 			const r = $showReal ? $ratio : 1;
-			return $lines.map((line, index) => {
+			return $lines.map((line) => {
 				return {
 					line,
-					index: index + 1,
 					x: (Math.abs(line.end.x - line.start.x) * r).toFixed(2),
 					y: (Math.abs(line.end.y - line.start.y) * r).toFixed(2),
 					angle: radianToDegree(lineSegmentAngle(line)).toFixed(0),
@@ -826,95 +880,60 @@
 				</label>
 			</div>
 		</div>
-		<div class="flex-1 overflow-auto pl-1">
+		<div class="flex-1 overflow-auto pl-1" bind:this={scrollElement}>
 			<div
-				class="grid grid-cols-[auto_1fr_auto_auto_auto_auto_min-content] border-t border-neutral-300 bg-white text-sm"
+				class="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto_min-content] border-t border-neutral-300 bg-white text-sm"
 			>
 				<div
-					class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 text-center font-medium"
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
+				></div>
+				<div
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
 				>
 					#
 				</div>
 				<div
-					class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 text-center font-medium"
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
 				>
 					Name
 				</div>
 				<div
-					class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 text-center font-medium"
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
 				>
 					X
 				</div>
 				<div
-					class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 text-center font-medium"
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
 				>
 					Y
 				</div>
 				<div
-					class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 text-center font-medium"
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
 				>
 					Angle
 				</div>
 				<div
-					class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 text-center font-medium"
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 text-center font-medium"
 				>
 					Length
 				</div>
-				<div class="border-b border-l border-inherit bg-neutral-200 px-1 py-0.5 font-medium"></div>
-				{#each $displayedLines as line, i}
-					<div class="contents border-inherit" class:bg-blue-200={line.isClosest}>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5 text-right">
-							{line.index}
-						</div>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5">
-							<input
-								type="text"
-								bind:value={$lines[i].name}
-								class="h-5.5 w-full rounded-sm border border-neutral-300 px-1 text-sm"
-								on:input={() => handleUpdateLineName(line.line)}
-								on:blur={() => handleBlurLineName(line.line)}
-							/>
-						</div>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5 text-right">
-							{line.x}
-						</div>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5 text-right">
-							{line.y}
-						</div>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5 text-right">
-							{line.angle}°
-						</div>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5 text-right">
-							{line.length}
-						</div>
-						<div class="border-b border-l border-inherit bg-inherit px-1 py-0.5">
-							<div class="flex items-center gap-1">
-								<Button
-									size="xs"
-									color={line.isLocked ? 'neutral' : 'light'}
-									on:click={() => handleClickLock(line.line)}
-									sr={line.isLocked ? 'Unlock' : 'Lock'}
-								>
-									<svelte:fragment slot="icon">
-										{#if line.isLocked}
-											<LockIcon class="size-[1em]" />
-										{:else}
-											<LockOpenIcon class="size-[1em]" />
-										{/if}
-									</svelte:fragment>
-								</Button>
-								<Button
-									size="xs"
-									color="red"
-									on:click={() => handleClickDelete(line.line)}
-									sr="Delete"
-								>
-									<TrashIcon slot="icon" class="size-[1em]" />
-								</Button>
-							</div>
-						</div>
-					</div>
-				{/each}
+				<div
+					class="border-b border-l border-neutral-300 bg-neutral-200 px-1 py-0.5 font-medium"
+				></div>
+				<Tree items={$hierarchy} onUpdate={handleUpdateTree}>
+					<svelte:fragment let:item>
+						<TreeItem
+							node={item}
+							{displayedLines}
+							{handleUpdateLineName}
+							{handleChangeLineName}
+							{handleClickHide}
+							{handleClickLock}
+							{handleClickDelete}
+							{handleClickDeleteGroup}
+						/>
+					</svelte:fragment>
+				</Tree>
 			</div>
 		</div>
 	</div>

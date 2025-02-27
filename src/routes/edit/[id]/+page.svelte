@@ -2,6 +2,7 @@
 	import Editor from '$lib/components/Editor.svelte';
 	import { insertMeasurement, updateMeasurement } from '$lib/db';
 	import type { Measurement } from '$lib/Measurement';
+	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -9,10 +10,16 @@
 	let { id, measurement } = data;
 
 	async function handleSave(record: Measurement) {
-		if (id == null) {
-			id = await insertMeasurement(record);
-		} else {
-			await updateMeasurement(id, record);
+		try {
+			if (id == null) {
+				id = await insertMeasurement(record);
+			} else {
+				await updateMeasurement(id, record);
+			}
+
+			toast.success(`Saved as ${record.name}`);
+		} catch (e) {
+			toast.error(`Failed to save: ${e}`);
 		}
 	}
 </script>

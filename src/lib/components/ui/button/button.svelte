@@ -102,8 +102,8 @@
 				colorClass = 'text-white bg-neutral-500 dark:bg-neutral-700';
 				enabledColorClass = 'hover:bg-neutral-600 dark:hover:bg-neutral-800';
 			} else if (color === 'light') {
-				colorClass = 'text-neutral-600 bg-neutral-300 dark:text-white dark:bg-neutral-800';
-				enabledColorClass = 'hover:bg-neutral-200 dark:hover:bg-neutral-700';
+				colorClass = 'text-neutral-600 bg-neutral-200 dark:text-white dark:bg-neutral-800';
+				enabledColorClass = 'hover:bg-neutral-300 dark:hover:bg-neutral-700';
 			} else if (color === 'yellow') {
 				colorClass = `text-white bg-yellow-400 dark:bg-yellow-600`;
 				enabledColorClass = `hover:bg-yellow-500 dark:hover:bg-yellow-500`;

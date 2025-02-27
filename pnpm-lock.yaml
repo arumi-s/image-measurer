@@ -26,9 +26,15 @@ importers:
       start-drag:
         specifier: ^1.0.1
         version: 1.0.1
+      svelte-dnd-action:
+        specifier: ^0.9.57
+        version: 0.9.57(svelte@5.20.0)
       svelte-file-dropzone:
         specifier: ^2.0.9
         version: 2.0.9(svelte@5.20.0)
+      svelte-sonner:
+        specifier: ^0.3.28
+        version: 0.3.28(svelte@5.20.0)
       tailwind-merge:
         specifier: ^3.0.1
         version: 3.0.1
@@ -1607,6 +1613,11 @@ packages:
       svelte: ^4.0.0 || ^5.0.0-next.0
       typescript: '>=5.0.0'
 
+  svelte-dnd-action@0.9.57:
+    resolution: {integrity: sha512-H1QPlthwAH+xjaISKbp/dQJYeC3Jt1mlTNqJDko0f7XgEyi5ee3PMEuAfF1soJXA0Y5ceb+W8xJXiSZ+2CeMNA==}
+    peerDependencies:
+      svelte: '>=3.23.0 || ^5.0.0-next.0'
+
   svelte-eslint-parser@0.43.0:
     resolution: {integrity: sha512-GpU52uPKKcVnh8tKN5P4UZpJ/fUDndmq7wfsvoVXsyP+aY0anol7Yqo01fyrlaWGMFfm4av5DyrjlaXdLRJvGA==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
@@ -1620,6 +1631,11 @@ packages:
     resolution: {integrity: sha512-+gS9DscyEcy2Q0jhcADPs7uUEnz56YKudKtLGteEGNi4lF7anPTyxDXoDRiNACWzsp3PF5KfYkw0GgrTieZK9Q==}
     peerDependencies:
       svelte: ^3.54.0 || ^4.0.0 || ^5
+
+  svelte-sonner@0.3.28:
+    resolution: {integrity: sha512-K3AmlySeFifF/cKgsYNv5uXqMVNln0NBAacOYgmkQStLa/UoU0LhfAACU6Gr+YYC8bOCHdVmFNoKuDbMEsppJg==}
+    peerDependencies:
+      svelte: ^3.0.0 || ^4.0.0 || ^5.0.0-next.1
 
   svelte@5.20.0:
     resolution: {integrity: sha512-04HJfFLaTwTyEKdPm3vYGdaD/8ZAHcd9SEBufq0FZNIrdzJWdM1usVdm4KIlzzDfM5+aMzio6BBhpXPoPGuMjg==}
@@ -3188,6 +3204,10 @@ snapshots:
     transitivePeerDependencies:
       - picomatch
 
+  svelte-dnd-action@0.9.57(svelte@5.20.0):
+    dependencies:
+      svelte: 5.20.0
+
   svelte-eslint-parser@0.43.0(svelte@5.20.0):
     dependencies:
       eslint-scope: 7.2.2
@@ -3201,6 +3221,10 @@ snapshots:
   svelte-file-dropzone@2.0.9(svelte@5.20.0):
     dependencies:
       file-selector: 0.6.0
+      svelte: 5.20.0
+
+  svelte-sonner@0.3.28(svelte@5.20.0):
+    dependencies:
       svelte: 5.20.0
 
   svelte@5.20.0:
