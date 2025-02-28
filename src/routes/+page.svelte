@@ -5,6 +5,7 @@
 	import { deleteMeasurement, type MeasurementDBRow } from '$lib/db';
 	import PencilIcon from 'lucide-svelte/icons/pencil';
 	import TrashIcon from 'lucide-svelte/icons/trash';
+	import Header from '$lib/components/Header.svelte';
 
 	export let data;
 
@@ -19,6 +20,7 @@
 </script>
 
 <div class="flex size-full flex-col overflow-hidden">
+	<Header />
 	<div class="shrink-0 p-4">
 		<Button color="green" href="/edit/">Create</Button>
 	</div>
